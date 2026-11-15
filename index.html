@@ -5,32 +5,69 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Space Music</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    * { margin: 0; box-sizing: border-box; }
-    body {
-      background: radial-gradient(circle at top, #1b1b3a, #0a0a14);
-      color: #fff;
-      font-family: -apple-system, Roboto, sans-serif;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      height: 100vh;
-    }
-    h1 { font-size: 28px; letter-spacing: 2px; }
-    p  { margin-top: 12px; color: #9a9ab8; }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>🚀 SPACE MUSIC</h1>
-  <p id="hello">Подключение к Телеграму...</p>
+  <header>🚀 SPACE MUSIC</header>
 
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
+  <main>
+    <section id="tab-home" class="tab active">
+      <h2>Недавно слушали</h2>
+      <div id="recent-list"></div>
+    </section>
 
-    const name = tg.initDataUnsafe?.user?.first_name || "космонавт";
-    document.getElementById("hello").textContent =
-      "Привет, " + name + "! Приложение подключено ✅";
-  </script>
+    <section id="tab-search" class="tab">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Песня или артист...">
+        <button id="search-btn">🔍</button>
+      </div>
+      <div id="search-results"></div>
+    </section>
+
+    <section id="tab-library" class="tab">
+      <h2>❤️ Любимые треки</h2>
+      <div id="fav-list"></div>
+    </section>
+
+    <section id="tab-events" class="tab">
+      <h2>🎸 Концерты</h2>
+      <p class="hint">Раздел подключим позже — на шаге с афишами</p>
+    </section>
+  </main>
+
+  <div id="mini-player" class="hidden">
+    <img id="mp-cover" src="" alt="">
+    <div id="mp-info">
+      <div id="mp-title"></div>
+      <div id="mp-artist"></div>
+    </div>
+    <button id="mp-play">▶</button>
+    <button id="mp-expand">⌃</button>
+  </div>
+
+  <nav>
+    <button class="nav-btn active" data-tab="home"><span>🏠</span>Главная</button>
+    <button class="nav-btn" data-tab="search"><span>🔍</span>Поиск</button>
+    <button class="nav-btn" data-tab="library"><span>❤️</span>Моя музыка</button>
+    <button class="nav-btn" data-tab="events"><span>🎸</span>Концерты</button>
+  </nav>
+
+  <div id="full-player" class="hidden">
+    <button id="fp-close">⌄</button>
+    <button id="fp-fav">🤍</button>
+    <img id="fp-cover" src="" alt="">
+    <div id="fp-title"></div>
+    <div id="fp-artist"></div>
+    <input type="range" id="fp-progress" value="0" min="0" max="100">
+    <div id="fp-time">0:00 / 0:00</div>
+    <div class="fp-controls">
+      <button id="fp-prev">⏮</button>
+      <button id="fp-play">▶</button>
+      <button id="fp-next">⏭</button>
+    </div>
+  </div>
+
+  <audio id="audio"></audio>
+  <script src="app.js"></script>
 </body>
 </html>
