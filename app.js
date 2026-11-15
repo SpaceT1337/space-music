@@ -6,6 +6,9 @@ tg.expand();
 function notify(msg) {
   try { tg.showAlert(msg); } catch (e) { alert(msg); }
 }
+function openExternal(u) {
+  try { tg.openLink(u); } catch (e) { window.open(u, '_blank'); }
+}
 
 // ============ Хранилище (CloudStorage + localStorage) ============
 const store = {
@@ -27,7 +30,7 @@ const store = {
   }
 };
 
-// ============ Универсальный JSONP (работает без CORS) ============
+// ============ JSONP (запросы без CORS) ============
 function jsonp(url) {
   return new Promise((resolve, reject) => {
     const cb = 'smCb_' + Math.random().toString(36).slice(2);
@@ -52,6 +55,7 @@ let currentIndex = -1;
 let favorites = [];
 let recent = [];
 let lastfmKey = '';
+let tmKey = '';
 
 const $ = (id) => document.getElementById(id);
 const audio = $('audio');
@@ -60,7 +64,9 @@ const audio = $('audio');
   favorites = JSON.parse((await store.get('sm_favorites')) || '[]');
   recent = JSON.parse((await store.get('sm_recent')) || '[]');
   lastfmKey = (await store.get('sm_lastfm_key')) || '';
+  tmKey = (await store.get('sm_tm_key')) || '';
   $('lastfm-key-input').value = lastfmKey;
+  $('tm-key-input').value = tmKey;
   renderList('fav-list', favorites);
   renderList('recent-list', recent);
 })();
@@ -141,19 +147,63 @@ function cleanBio(html) {
   return html.replace(/<a[\s\S]*?<\/a>/gi, '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 }
 
-// ============ Bandsintown (концерты) ============
+// ============ КОНЦЕРТЫ: Bandsintown ============
+// Когда придёт одобрение заявки — впиши сюда свой зарегистрированный app_id
+const BIT_APP_ID = 'spacemusic_personal';
+
 async function bitEvents(artist) {
   const name = encodeURIComponent(artist);
-  const base = 'https://rest.bandsintown.com/artists/' + name + '/events?app_id=spacemusic_personal';
+  const base = 'https://rest.bandsintown.com/artists/' + name + '/events?app_id=' + BIT_APP_ID;
   try {
     const res = await fetch(base);
     if (res.ok) {
       const j = await res.json();
       return Array.isArray(j) ? j : [];
     }
-  } catch (e) { /* пробуем JSONP */ }
+  } catch (e) {}
   const j = await jsonp(base);
   return Array.isArray(j) ? j : [];
+}
+
+// ============ КОНЦЕРТЫ: Ticketmaster ============
+async function tmEvents(artist, key) {
+  const url = 'https://app.ticketmaster.com/discovery/v2/events.json'
+    + '?apikey=' + encodeURIComponent(key)
+    + '&keyword=' + encodeURIComponent(artist)
+    + '&classificationName=Music&size=20&sort=date,asc';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('TM: ' + res.status);
+  const j = await res.json();
+  const events = (j._embedded && j._embedded.events) || [];
+  return events.map(ev => {
+    const v = (ev._embedded && ev._embedded.venues && ev._embedded.venues[0]) || {};
+    return {
+      datetime: (ev.dates && ev.dates.start && (ev.dates.start.dateTime || ev.dates.start.localDate)) || '',
+      venue: {
+        name: v.name || '',
+        city: (v.city && v.city.name) || '',
+        country: (v.country && v.country.name) || ''
+      },
+      lineup: [ev.name || artist],
+      url: ev.url || '',
+      offers: ev.url ? [{ url: ev.url }] : []
+    };
+  }).filter(e => e.datetime);
+}
+
+// Единая загрузка концертов: Bandsintown → Ticketmaster → пусто
+async function loadConcerts(artist) {
+  try {
+    const ev = await bitEvents(artist);
+    if (ev.length) return ev;
+  } catch (e) {}
+  if (tmKey) {
+    try {
+      const ev = await tmEvents(artist, tmKey);
+      if (ev.length) return ev;
+    } catch (e) {}
+  }
+  return [];
 }
 
 // ============ Поиск ============
@@ -189,7 +239,6 @@ function trackCard(t, index, listRef) {
     toggleFavorite(t);
     e.target.textContent = favorites.some(f => f.id === t.id) ? '❤️' : '🤍';
   };
-  // Клик по имени артиста → карточка артиста
   el.querySelector('.t-artist').onclick = (e) => {
     e.stopPropagation();
     openArtist(t.artist);
@@ -266,12 +315,20 @@ async function openArtist(name) {
   $('av-events').innerHTML = '<p class="hint">Загружаю афишу... 🛰️</p>';
   $('artist-view').scrollTop = 0;
 
-  // Фото, био, статистика
+  // Фото (перебираем размеры, если ссылка битая), био, статистика
   try {
     const info = await lastfm('artist.getinfo', { artist: name });
     const imgs = (info.artist && info.artist.image) || [];
-    const ph = (imgs.find(i => i.size === 'mega') || imgs.find(i => i.size === 'extralarge') || {})['#text'];
-    if (ph) { $('av-photo').src = ph; $('av-photo').classList.remove('hidden'); }
+    const urls = ['mega', 'extralarge', 'large']
+      .map(s => (imgs.find(i => i.size === s) || {})['#text'])
+      .filter(u => u);
+    const img = $('av-photo');
+    (function tryPhoto(i) {
+      if (i >= urls.length) { img.classList.add('hidden'); return; }
+      img.onload = () => img.classList.remove('hidden');
+      img.onerror = () => tryPhoto(i + 1);
+      img.src = urls[i];
+    })(0);
     $('av-bio').textContent = cleanBio(info.artist && info.artist.bio && info.artist.bio.summary);
     const st = (info.artist && info.artist.stats) || {};
     $('av-listeners').textContent = '👥 ' + Number(st.listeners || 0).toLocaleString('ru-RU')
@@ -279,7 +336,7 @@ async function openArtist(name) {
   } catch (e) {
     $('av-bio').textContent = lastfmKey
       ? 'Не удалось загрузить информацию об артисте'
-      : 'Добавь ключ Last.fm в ⚙️ Настройках («Моя музыка»), чтобы видеть фото, био и топ-треки.';
+      : 'Добавь ключ Last.fm в ⚙️ Настройках, чтобы видеть фото, био и топ-треки.';
   }
 
   // Топ-треки
@@ -307,7 +364,7 @@ async function openArtist(name) {
 
   // Концерты
   try {
-    const events = await bitEvents(name);
+    const events = await loadConcerts(name);
     renderEvents('av-events', events, name);
   } catch (e) {
     $('av-events').innerHTML = '<p class="hint">Не удалось загрузить афишу 😔</p>';
@@ -328,7 +385,7 @@ async function playTopTrack(artist, title) {
   $('artist-view').classList.add('hidden');
 }
 
-// ============ Концерты ============
+// ============ Отрисовка концертов ============
 function renderEvents(containerId, events, fallbackArtist) {
   const box = $(containerId);
   box.innerHTML = '';
@@ -336,7 +393,21 @@ function renderEvents(containerId, events, fallbackArtist) {
     .slice()
     .sort((a, b) => new Date(a.datetime) - new Date(b.datetime))
     .slice(0, 30);
-  if (!list.length) { box.innerHTML = '<p class="hint">Концертов не запланировано 🌌</p>'; return; }
+  if (!list.length) {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'Дат в базе не нашлось 🌌 Проверить вручную:';
+    box.appendChild(hint);
+    const btn = document.createElement('button');
+    btn.className = 'ev-ticket';
+    btn.textContent = 'Афиша на Last.fm ↗';
+    btn.onclick = () => {
+      const u = 'https://www.last.fm/music/' + encodeURIComponent(fallbackArtist || '').replace(/%20/g, '+') + '/+events';
+      openExternal(u);
+    };
+    box.appendChild(btn);
+    return;
+  }
   list.forEach(ev => {
     const v = ev.venue || {};
     const d = new Date(ev.datetime);
@@ -354,13 +425,14 @@ function renderEvents(containerId, events, fallbackArtist) {
       const btn = document.createElement('button');
       btn.className = 'ev-ticket';
       btn.textContent = 'Билеты';
-      btn.onclick = () => { try { tg.openLink(ticket); } catch (e) { window.open(ticket, '_blank'); } };
+      btn.onclick = () => openExternal(ticket);
       card.appendChild(btn);
     }
     box.appendChild(card);
   });
 }
 
+// ============ Вкладка «Концерты» ============
 let eventsLoading = false;
 async function loadEventsTab() {
   if (eventsLoading) return;
@@ -384,16 +456,27 @@ async function loadEventsTab() {
     return;
   }
   $('events-list').innerHTML = '<p class="hint">Загружаю афишу... 🛰️</p>';
-  const results = await Promise.allSettled(artists.map(a => bitEvents(a).then(ev => ({ artist: a, ev }))));
-  let all = [], okCount = 0;
+  const results = await Promise.allSettled(artists.map(a => loadConcerts(a).then(ev => ({ artist: a, ev }))));
+  let all = [];
+  let gotSomething = false;
   results.forEach(r => {
     if (r.status === 'fulfilled') {
-      okCount++;
       all = all.concat((r.value.ev || []).map(e => Object.assign({}, e, { _artist: r.value.artist })));
+      if ((r.value.ev || []).length) gotSomething = true;
     }
   });
-  if (okCount === 0) {
-    $('events-list').innerHTML = '<p class="hint">Не удалось загрузить афишу 😔 Попробуй позже</p>';
+  // Убираем дубликаты (одинаковая дата + площадка)
+  const seen = new Set();
+  all = all.filter(e => {
+    const k = (e.datetime || '') + '|' + ((e.venue && e.venue.name) || '');
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  if (!all.length) {
+    $('events-list').innerHTML = gotSomething
+      ? '<p class="hint">У этих артистов сейчас нет запланированных концертов 🌌</p>'
+      : '<p class="hint">Не удалось загрузить афишу 😔 Попробуй позже</p>';
     eventsLoading = false;
     return;
   }
@@ -462,22 +545,22 @@ $('fp-fav').onclick = () => {
 $('fp-progress').oninput = () => {
   if (audio.duration) audio.currentTime = ($('fp-progress').value / 100) * audio.duration;
 };
-// Клик по имени артиста в полноэкранном плеере
 $('fp-artist').onclick = () => {
   const t = queue[currentIndex];
   if (t) openArtist(t.artist);
 };
-// Карточка артиста — назад
 $('av-back').onclick = () => $('artist-view').classList.add('hidden');
 
-// ============ Настройки (ключ Last.fm) ============
+// ============ Настройки (ключи) ============
 $('save-lastfm').onclick = async () => {
   lastfmKey = $('lastfm-key-input').value.trim();
   await store.set('sm_lastfm_key', lastfmKey);
-  notify(lastfmKey ? 'Ключ сохранён ✅' : 'Ключ очищен');
+  notify(lastfmKey ? 'Ключ Last.fm сохранён ✅' : 'Ключ Last.fm очищен');
 };
-$('lastfm-help').onclick = (e) => {
-  e.preventDefault();
-  try { tg.openLink('https://www.last.fm/api/account/create'); }
-  catch (err) { window.open('https://www.last.fm/api/account/create', '_blank'); }
+$('save-tm').onclick = async () => {
+  tmKey = $('tm-key-input').value.trim();
+  await store.set('sm_tm_key', tmKey);
+  notify(tmKey ? 'Ключ Ticketmaster сохранён ✅' : 'Ключ Ticketmaster очищен');
 };
+$('lastfm-help').onclick = (e) => { e.preventDefault(); openExternal('https://www.last.fm/api/account/create'); };
+$('tm-help').onclick = (e) => { e.preventDefault(); openExternal('https://developer.ticketmaster.com/'); };
