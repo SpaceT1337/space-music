@@ -130,3 +130,14 @@ nav { display: flex; background: #12122a; padding: 8px 0 6px; }
 .fp-controls { display: flex; align-items: center; gap: 28px; }
 .fp-controls button { background: none; border: none; color: #fff; font-size: 26px; cursor: pointer; }
 #fp-play { font-size: 44px !important; color: var(--accent) !important; }
+
+/* ==== Бейджи источника трека ==== */
+.badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-left: 4px;
+}
+.b-full    { background: rgba(46, 204, 113, .15); color: #2ecc71; }
+.b-preview { background: rgba(255, 255, 255, .08); color: var(--muted); }
