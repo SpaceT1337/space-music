@@ -29,10 +29,18 @@
       <div id="fav-list"></div>
       <details class="settings">
         <summary>⚙️ Настройки</summary>
-        <p class="hint">Для карточек артистов нужен бесплатный ключ <a href="#" id="lastfm-help">Last.fm API</a> (инструкция ниже).</p>
+        <p class="hint">Бесплатные ключи для карточек артистов и афиши.</p>
+
+        <p><b>Last.fm</b> — фото, био, топ-треки. <a href="#" id="lastfm-help">Получить ключ ↗</a></p>
         <div class="key-row">
-          <input type="text" id="lastfm-key-input" placeholder="Вставь ключ сюда">
+          <input type="text" id="lastfm-key-input" placeholder="Ключ Last.fm">
           <button id="save-lastfm">OK</button>
+        </div>
+
+        <p style="margin-top:14px"><b>Ticketmaster</b> — концерты. <a href="#" id="tm-help">Получить ключ ↗</a></p>
+        <div class="key-row">
+          <input type="text" id="tm-key-input" placeholder="Ключ Ticketmaster">
+          <button id="save-tm">OK</button>
         </div>
       </details>
     </section>
