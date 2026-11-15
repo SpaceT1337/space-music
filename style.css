@@ -141,3 +141,63 @@ nav { display: flex; background: #12122a; padding: 8px 0 6px; }
 }
 .b-full    { background: rgba(46, 204, 113, .15); color: #2ecc71; }
 .b-preview { background: rgba(255, 255, 255, .08); color: var(--muted); }
+
+/* ==== Карточка артиста ==== */
+#artist-view {
+  position: fixed; inset: 0; z-index: 110;
+  background: radial-gradient(circle at top, #1b1b3a, var(--bg));
+  overflow-y: auto;
+  padding: 56px 16px 30px;
+}
+#artist-view.hidden { display: none; }
+#av-back {
+  position: fixed; top: 14px; left: 14px; z-index: 120;
+  background: rgba(0,0,0,.35); border: none; color: #fff;
+  font-size: 22px; width: 40px; height: 40px;
+  border-radius: 12px; cursor: pointer;
+}
+#av-photo {
+  display: block; width: min(50vw, 190px); height: min(50vw, 190px);
+  border-radius: 50%; object-fit: cover; margin: 6px auto 14px;
+  box-shadow: 0 16px 50px rgba(124,108,255,.35);
+}
+#av-photo.hidden { display: none; }
+#av-name { text-align: center; font-size: 22px; }
+#av-listeners { text-align: center; color: var(--muted); font-size: 12px; margin-top: 4px; }
+#av-bio { color: #c9c9de; font-size: 13px; line-height: 1.5; margin-top: 10px; }
+#artist-view h3 { font-size: 15px; margin: 18px 0 8px; color: var(--accent); }
+.top-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 6px;
+  cursor: pointer; font-size: 14px;
+}
+.top-row .n { color: var(--muted); width: 18px; }
+
+/* ==== Концерты ==== */
+.ev-card { background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+.ev-date { font-size: 12px; color: var(--accent); font-weight: 700; }
+.ev-artist { font-size: 15px; font-weight: 600; margin: 3px 0; }
+.ev-place { font-size: 12px; color: var(--muted); }
+.ev-ticket {
+  display: inline-block; margin-top: 8px;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 12px; font-weight: 600; padding: 6px 14px;
+  border-radius: 10px; cursor: pointer;
+}
+
+/* ==== Прочее ==== */
+#fp-artist { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.settings { margin-top: 22px; color: var(--muted); font-size: 13px; }
+.settings summary { cursor: pointer; }
+.settings a { color: var(--accent); }
+.key-row { display: flex; gap: 8px; margin-top: 10px; }
+.key-row input {
+  flex: 1; background: var(--card); border: 1px solid #2a2a4a;
+  border-radius: 10px; padding: 10px 12px; color: #fff;
+  font-size: 13px; outline: none;
+}
+.key-row button {
+  background: var(--accent); border: none; border-radius: 10px;
+  color: #fff; padding: 0 16px; cursor: pointer; font-weight: 700;
+}
