@@ -27,11 +27,24 @@
     <section id="tab-library" class="tab">
       <h2>❤️ Любимые треки</h2>
       <div id="fav-list"></div>
+      <details class="settings">
+        <summary>⚙️ Настройки</summary>
+        <p class="hint">Для карточек артистов нужен бесплатный ключ <a href="#" id="lastfm-help">Last.fm API</a> (инструкция ниже).</p>
+        <div class="key-row">
+          <input type="text" id="lastfm-key-input" placeholder="Вставь ключ сюда">
+          <button id="save-lastfm">OK</button>
+        </div>
+      </details>
     </section>
 
     <section id="tab-events" class="tab">
       <h2>🎸 Концерты</h2>
-      <p class="hint">Раздел подключим позже — на шаге с афишами</p>
+      <div class="search-box">
+        <input type="text" id="events-input" placeholder="Найти концерты артиста...">
+        <button id="events-btn">🔎</button>
+      </div>
+      <p class="hint">Афиша артистов из твоей музыки. Или найди любого по имени.</p>
+      <div id="events-list"></div>
     </section>
   </main>
 
@@ -64,6 +77,21 @@
       <button id="fp-prev">⏮</button>
       <button id="fp-play">▶</button>
       <button id="fp-next">⏭</button>
+    </div>
+  </div>
+
+  <div id="artist-view" class="hidden">
+    <button id="av-back">←</button>
+    <div id="av-body">
+      <p id="av-loading" class="hint">Загружаю артиста... 🛰️</p>
+      <img id="av-photo" class="hidden" src="" alt="">
+      <h2 id="av-name"></h2>
+      <p id="av-listeners"></p>
+      <p id="av-bio"></p>
+      <h3>Популярные треки</h3>
+      <div id="av-top"></div>
+      <h3>Концерты</h3>
+      <div id="av-events"></div>
     </div>
   </div>
 
