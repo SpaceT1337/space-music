@@ -3,7 +3,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-// ============ Хранилище (CloudStorage Telegram + страховка localStorage) ============
+// ============ Хранилище (CloudStorage Telegram + localStorage как страховка) ============
 const store = {
   get(key) {
     return new Promise((resolve) => {
@@ -32,7 +32,6 @@ let recent = [];
 const $ = (id) => document.getElementById(id);
 const audio = $('audio');
 
-// Загружаем сохраненные лайки и историю
 (async () => {
   favorites = JSON.parse((await store.get('sm_favorites')) || '[]');
   recent = JSON.parse((await store.get('sm_recent')) || '[]');
@@ -50,33 +49,93 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   };
 });
 
-// ============ Поиск (iTunes API) ============
-async function doSearch() {
-  const q = $('search-input').value.trim();
-  if (!q) return;
-  const box = $('search-results');
-  box.innerHTML = '<p class="hint">Ищу в космосе... 🛰️</p>';
+// ============ ИСТОЧНИК 1: Audius (полные треки) ============
+let audiusHost = null;
+
+async function getAudiusHost() {
+  if (audiusHost) return audiusHost;
   try {
-    const url = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q)
-      + '&media=music&entity=song&limit=25&country=ru';
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data.results || !data.results.length) {
-      box.innerHTML = '<p class="hint">Ничего не нашлось 🤷</p>';
-      return;
+    const res = await fetch('https://api.audius.co');
+    const j = await res.json();
+    if (j.data && j.data.length) { audiusHost = j.data[0]; return audiusHost; }
+  } catch (e) { /* ниже запасной вариант */ }
+  audiusHost = 'https://discoveryprovider.audius.co';
+  return audiusHost;
+}
+
+async function searchAudius(query) {
+  const host = await getAudiusHost();
+  const url = host + '/v1/tracks/search?query=' + encodeURIComponent(query) + '&app_name=SpaceMusic';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Audius: ' + res.status);
+  const j = await res.json();
+  return (j.data || [])
+    .filter(t => t && t.is_streamable !== false && !t.is_delete)
+    .map(t => ({
+      id: 'au_' + t.id,
+      title: t.title,
+      artist: (t.user && t.user.name) || 'Audius',
+      album: 'Audius',
+      cover: (t.artwork && (t.artwork['480x480.jpg'] || t.artwork['150x150.jpg'])) || '',
+      url: host + '/v1/tracks/' + t.id + '/stream?app_name=SpaceMusic',
+      full: true
+    }));
+}
+
+// ============ ИСТОЧНИК 2: iTunes (обложки, метаданные, превью 30 сек) ============
+// JSONP вместо fetch — работает в любом браузере без ограничений CORS
+function itunesSearch(query) {
+  return new Promise((resolve, reject) => {
+    const cb = 'smCb_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 10000);
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+      script.remove();
     }
-    queue = data.results.map(r => ({
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('network')); };
+    script.src = 'https://itunes.apple.com/search?term=' + encodeURIComponent(query)
+      + '&media=music&entity=song&limit=25&country=ru&callback=' + cb;
+    document.head.appendChild(script);
+  });
+}
+
+async function searchItunes(query) {
+  const data = await itunesSearch(query);
+  return (data.results || [])
+    .map(r => ({
       id: 'it_' + r.trackId,
       title: r.trackName,
       artist: r.artistName,
       album: r.collectionName || '',
       cover: (r.artworkUrl100 || '').replace('100x100', '600x600'),
-      url: r.previewUrl
-    }));
-    renderList('search-results', queue);
-  } catch {
-    box.innerHTML = '<p class="hint">Ошибка сети. Попробуй ещё раз</p>';
+      url: r.previewUrl,
+      full: false
+    }))
+    .filter(t => t.url);
+}
+
+// ============ Поиск ============
+async function doSearch() {
+  const q = $('search-input').value.trim();
+  if (!q) return;
+  const box = $('search-results');
+  box.innerHTML = '<p class="hint">Ищу в космосе... 🛰️</p>';
+
+  let fullTracks = [];
+  let previews = [];
+  try { fullTracks = await searchAudius(q); } catch (e) {}
+  try { previews = await searchItunes(q); } catch (e) {}
+
+  queue = [...fullTracks, ...previews];
+
+  if (!queue.length) {
+    box.innerHTML = '<p class="hint">Ничего не нашлось 🤷</p>';
+    return;
   }
+  renderList('search-results', queue);
 }
 $('search-btn').onclick = doSearch;
 $('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -90,14 +149,13 @@ function trackCard(t, index, listRef) {
     <img src="${t.cover}" alt="">
     <div class="t-info">
       <div class="t-title">${t.title}</div>
-      <div class="t-artist">${t.artist}</div>
+      <div class="t-artist">${t.artist} <span class="badge ${t.full ? 'b-full' : 'b-preview'}">${t.full ? 'FULL' : '30 сек'}</span></div>
     </div>
     <button class="fav-btn">${isFav ? '❤️' : '🤍'}</button>`;
   el.querySelector('.fav-btn').onclick = (e) => {
     e.stopPropagation();
     toggleFavorite(t);
-    const now = favorites.some(f => f.id === t.id);
-    e.target.textContent = now ? '❤️' : '🤍';
+    e.target.textContent = favorites.some(f => f.id === t.id) ? '❤️' : '🤍';
   };
   el.onclick = () => playFrom(listRef, index);
   return el;
@@ -155,7 +213,7 @@ function updatePlayerUI(t) {
   $('mini-player').classList.remove('hidden');
   $('mp-cover').src = t.cover;
   $('mp-title').textContent = t.title;
-  $('mp-artist').textContent = t.artist;
+  $('mp-artist').textContent = t.artist + (t.full ? ' · FULL' : ' · превью 30 сек');
   $('fp-cover').src = t.cover;
   $('fp-title').textContent = t.title;
   $('fp-artist').textContent = t.artist;
@@ -187,6 +245,10 @@ audio.addEventListener('pause', () => {
   $('fp-play').textContent = '▶';
 });
 audio.addEventListener('ended', () => changeTrack(1));
+audio.addEventListener('error', () => {
+  // Если трек не загрузился — тихо переключаемся на следующий (если их несколько)
+  if (queue.length > 1) changeTrack(1);
+});
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;
   $('fp-progress').value = (audio.currentTime / audio.duration) * 100;
